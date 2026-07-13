@@ -15,25 +15,29 @@ function useDraggableName({ resolved, onDragBack, dropTargetRef, onDragStateChan
     if (resolved === false) return;
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
-    nameRef.current.setPointerCapture(e.pointerId);
+    nameRef.current?.setPointerCapture(e.pointerId);
     startRef.current = { x: e.clientX, y: e.clientY };
     lastPointRef.current = { x: e.clientX, y: e.clientY };
     overRef.current = false;
     setDragging(true);
     setDragOffset({ x: 0, y: 0 });
     onDragStateChange && onDragStateChange({ dragging: true, over: false });
-    // Bring the drop target into view so the drag has a visible destination
+    // Keep the destination centered without scrolling the page under the
+    // user's finger. scrollIntoView() can nudge the mobile viewport vertically.
     if (dropTargetRef && dropTargetRef.current) {
-      dropTargetRef.current.scrollIntoView({
-        behavior: prefersReducedMotion() ? "auto" : "smooth",
-        inline: "center",
-        block: "nearest",
-      });
+      const target = dropTargetRef.current;
+      const strip = target.closest(".filmstrip");
+      if (strip) {
+        const left = target.offsetLeft + target.offsetWidth / 2 - strip.clientWidth / 2;
+        if (prefersReducedMotion()) strip.scrollLeft = left;
+        else strip.scrollTo({ left, behavior: "smooth" });
+      }
     }
   }
 
   function onPointerMove(e) {
     if (!dragging) return;
+    e.preventDefault();
     lastPointRef.current = { x: e.clientX, y: e.clientY };
     setDragOffset({ x: e.clientX - startRef.current.x, y: e.clientY - startRef.current.y });
     let nowOver = false;
@@ -60,10 +64,15 @@ function useDraggableName({ resolved, onDragBack, dropTargetRef, onDragStateChan
   }
 
   const handlers = {
-    onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel: onPointerUp,
+    onContextMenu: (e) => e.preventDefault(),
+    onDragStart: (e) => e.preventDefault(),
   };
   const style = dragging
-    ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px) rotate(-2deg) scale(1.02)` }
+    ? { transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` }
     : null;
   return { nameRef, dragging, handlers, style };
 }
@@ -91,6 +100,7 @@ export function Hero({ resolved, setView, onDragBack, showTugCue, dropTargetRef,
             }
           }}
           title="Drag my name into the empty frame in the reel"
+          draggable={false}
           tabIndex={0}
           role="button"
           aria-label="Open the archive view — drag the name into the empty frame, or press Enter"
